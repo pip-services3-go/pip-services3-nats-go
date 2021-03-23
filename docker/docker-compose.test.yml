@@ -1,0 +1,26 @@
+version: '3.3'
+
+services:
+  test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    image: ${IMAGE:-pipdevs/test}
+    depends_on:
+      - nats
+    environment:
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_HOST=nats
+      - RABBITMQ_USER=user
+      - RABBITMQ_PASS=password
+      - RABBITMQ_QUEUE=test
+      - RABBITMQ_EXCHANGE=test
+
+  nats:
+    image: nats:3.8.9-alpine
+    environment: 
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    # container_name: nats
+    # ports:
+    #   - "5672:5672"

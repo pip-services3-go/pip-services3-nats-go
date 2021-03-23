@@ -1,0 +1,9 @@
+version: '3.3'
+
+services:
+  nats:
+    container_name: nats
+    image: nats:latest
+#    command: -c nats-server.conf
+    ports:
+      - "4222:4222"

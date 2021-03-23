@@ -1,0 +1,6 @@
+{
+    "name": "pip-services3-nats-go",
+    "registry": "github.com/pip-services3-go",
+    "version": "1.0.0",
+    "build": 0
+}
