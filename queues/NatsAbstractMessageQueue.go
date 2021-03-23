@@ -1,7 +1,6 @@
 package queues
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -33,9 +32,9 @@ type NatsAbstractMessageQueue struct {
 	//The NATS connection object.
 	Client *nats.Conn
 
-	SerializeEnvelop bool
-	Subject          string
-	QueueGroup       string
+	// SerializeEnvelop bool
+	Subject    string
+	QueueGroup string
 }
 
 // Creates a new instance of the queue component.
@@ -46,7 +45,7 @@ func InheritNatsAbstractMessageQueue(overrides cqueues.IMessageQueueOverrides, n
 		defaultConfig: cconf.NewConfigParamsFromTuples(
 			"subject", nil,
 			"queue_group", nil,
-			"options.serialize_envelop", true,
+			// "options.serialize_envelop", true,
 			"options.retry_connect", true,
 			"options.connect_timeout", 0,
 			"options.reconnect_timeout", 3000,
@@ -69,7 +68,7 @@ func (c *NatsAbstractMessageQueue) Configure(config *cconf.ConfigParams) {
 
 	c.DependencyResolver.Configure(config)
 
-	c.SerializeEnvelop = config.GetAsBooleanWithDefault("options.serialize_envelop", c.SerializeEnvelop)
+	// c.SerializeEnvelop = config.GetAsBooleanWithDefault("options.serialize_envelop", c.SerializeEnvelop)
 	c.Subject = config.GetAsStringWithDefault("topic", c.Subject)
 	c.Subject = config.GetAsStringWithDefault("subject", c.Subject)
 	c.QueueGroup = config.GetAsStringWithDefault("group", c.QueueGroup)
@@ -203,20 +202,27 @@ func (c *NatsAbstractMessageQueue) FromMessage(message *cqueues.MessageEnvelope)
 		return nil, nil
 	}
 
-	if c.SerializeEnvelop {
-		data, err := json.Marshal(message)
-		if err != nil {
-			return nil, err
-		}
+	// if c.SerializeEnvelop {
+	// 	data, err := json.Marshal(message)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
 
-		msg := nats.NewMsg(c.Name)
-		msg.Data = data
-		return msg, nil
-	} else {
-		msg := nats.NewMsg(c.Name)
-		msg.Data = message.Message
-		return msg, nil
-	}
+	// 	msg := nats.NewMsg(c.Name)
+	// 	msg.Data = data
+	// 	return msg, nil
+	// } else {
+	// 	msg := nats.NewMsg(c.Name)
+	// 	msg.Data = message.Message
+	// 	return msg, nil
+	// }
+
+	msg := nats.NewMsg(c.Name)
+	msg.Data = message.Message
+	msg.Header.Add("message_id", message.MessageId)
+	msg.Header.Add("correlation_id", message.CorrelationId)
+	msg.Header.Add("message_type", message.MessageType)
+	return msg, nil
 }
 
 func (c *NatsAbstractMessageQueue) ToMessage(msg *nats.Msg) (*cqueues.MessageEnvelope, error) {
@@ -224,14 +230,22 @@ func (c *NatsAbstractMessageQueue) ToMessage(msg *nats.Msg) (*cqueues.MessageEnv
 		return nil, nil
 	}
 
-	if c.SerializeEnvelop {
-		envelop := cqueues.MessageEnvelope{}
-		err := json.Unmarshal(msg.Data, &envelop)
-		return &envelop, err
-	} else {
-		envelop := cqueues.NewMessageEnvelope("", "", msg.Data)
-		return envelop, nil
-	}
+	// if c.SerializeEnvelop {
+	// 	envelop := cqueues.MessageEnvelope{}
+	// 	err := json.Unmarshal(msg.Data, &envelop)
+	// 	return &envelop, err
+	// } else {
+	// 	envelop := cqueues.NewMessageEnvelope("", "", msg.Data)
+	// 	return envelop, nil
+	// }
+
+	message := cqueues.NewEmptyMessageEnvelope()
+	message.MessageId = msg.Header.Get("message_id")
+	message.CorrelationId = msg.Header.Get("correlation_id")
+	message.MessageType = msg.Header.Get("message_type")
+	message.Message = msg.Data
+
+	return message, nil
 }
 
 // Clear method are clears component state.
