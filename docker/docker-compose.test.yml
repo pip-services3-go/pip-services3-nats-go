@@ -9,18 +9,12 @@ services:
     depends_on:
       - nats
     environment:
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_HOST=nats
-      - RABBITMQ_USER=user
-      - RABBITMQ_PASS=password
-      - RABBITMQ_QUEUE=test
-      - RABBITMQ_EXCHANGE=test
+      - NATS_SERVICE_PORT=5672
+      - NATS_SERVICE_HOST=nats
+      - NATS_QUEUE=test
 
   nats:
-    image: nats:3.8.9-alpine
-    environment: 
-      RABBITMQ_DEFAULT_USER: user
-      RABBITMQ_DEFAULT_PASS: password
-    # container_name: nats
+    container_name: nats
+    image: nats:latest
     # ports:
-    #   - "5672:5672"
+    #   - "4222:4222"
