@@ -3,6 +3,7 @@ package build
 import (
 	cref "github.com/pip-services3-go/pip-services3-commons-go/refer"
 	cbuild "github.com/pip-services3-go/pip-services3-components-go/build"
+	connect "github.com/pip-services3-go/pip-services3-nats-go/connect"
 	queues "github.com/pip-services3-go/pip-services3-nats-go/queues"
 )
 
@@ -18,10 +19,13 @@ func NewDefaultNatsFactory() *DefaultNatsFactory {
 	c.Factory = cbuild.NewFactory()
 
 	natsQueueFactoryDescriptor := cref.NewDescriptor("pip-services", "queue-factory", "nats", "*", "1.0")
+	natsConnectionDescriptor := cref.NewDescriptor("pip-services", "connection", "nats", "*", "1.0")
 	bareNatsQueueDescriptor := cref.NewDescriptor("pip-services", "message-queue", "bare-nats", "*", "1.0")
 	natsQueueDescriptor := cref.NewDescriptor("pip-services", "message-queue", "nats", "*", "1.0")
 
 	c.RegisterType(natsQueueFactoryDescriptor, NewNatsMessageQueueFactory)
+
+	c.RegisterType(natsConnectionDescriptor, connect.NewNatsConnection)
 
 	c.Register(bareNatsQueueDescriptor, func(locator interface{}) interface{} {
 		name := ""
