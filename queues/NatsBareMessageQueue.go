@@ -131,8 +131,20 @@ func (c *NatsBareMessageQueue) Receive(correlationId string, waitTimeout time.Du
 		return nil, err
 	}
 
-	// Convert the message and return
-	return c.ToMessage(msg)
+	if msg != nil {
+		message, err := c.ToMessage(msg)
+		if err != nil {
+			return nil, err
+		}
+
+		c.Counters.IncrementOne("queue." + c.Name() + ".received_messages")
+		c.Logger.Debug(message.CorrelationId, "Received message %s via %s", msg, c.Name())
+
+		// Convert the message and return
+		return message, nil
+	}
+
+	return nil, nil
 }
 
 func (c *NatsBareMessageQueue) receiveMessage(receiver cqueues.IMessageReceiver) func(msg *nats.Msg) {
