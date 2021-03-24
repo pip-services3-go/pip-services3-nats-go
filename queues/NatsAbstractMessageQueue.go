@@ -185,6 +185,7 @@ func (c *NatsAbstractMessageQueue) Close(correlationId string) (err error) {
 		return err
 	}
 
+	// Todo: Flush messages?
 	c.opened = false
 	c.Client = nil
 
