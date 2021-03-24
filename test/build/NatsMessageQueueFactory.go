@@ -11,7 +11,7 @@ import (
 
 func TestNatsMessageQueueFactory(t *testing.T) {
 	factory := build.NewNatsMessageQueueFactory()
-	descriptor := cref.NewDescriptor("pip-service", "message-queue", "bare-nats", "test", "1.0")
+	descriptor := cref.NewDescriptor("pip-services", "message-queue", "bare-nats", "test", "1.0")
 
 	canResult := factory.CanCreate(descriptor)
 	assert.NotNil(t, canResult)
