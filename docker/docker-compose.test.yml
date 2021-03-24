@@ -9,7 +9,7 @@ services:
     depends_on:
       - nats
     environment:
-      - NATS_SERVICE_PORT=5672
+      - NATS_SERVICE_PORT=4222
       - NATS_SERVICE_HOST=nats
       - NATS_QUEUE=test
 
