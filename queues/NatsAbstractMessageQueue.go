@@ -6,8 +6,11 @@ import (
 	"github.com/nats-io/nats.go"
 
 	cconf "github.com/pip-services3-go/pip-services3-commons-go/config"
+	cconv "github.com/pip-services3-go/pip-services3-commons-go/convert"
 	cerr "github.com/pip-services3-go/pip-services3-commons-go/errors"
 	cref "github.com/pip-services3-go/pip-services3-commons-go/refer"
+	cauth "github.com/pip-services3-go/pip-services3-components-go/auth"
+	cconn "github.com/pip-services3-go/pip-services3-components-go/connect"
 	clog "github.com/pip-services3-go/pip-services3-components-go/log"
 	cqueues "github.com/pip-services3-go/pip-services3-messaging-go/queues"
 	connect "github.com/pip-services3-go/pip-services3-nats-go/connect"
@@ -40,7 +43,7 @@ type NatsAbstractMessageQueue struct {
 // Creates a new instance of the queue component.
 //   - overrides a queue overrides
 //   - name    (optional) a queue name.
-func InheritNatsAbstractMessageQueue(overrides cqueues.IMessageQueueOverrides, name string) *NatsAbstractMessageQueue {
+func InheritNatsAbstractMessageQueue(overrides cqueues.IMessageQueueOverrides, name string, capabilities *cqueues.MessagingCapabilities) *NatsAbstractMessageQueue {
 	c := &NatsAbstractMessageQueue{
 		defaultConfig: cconf.NewConfigParamsFromTuples(
 			"subject", nil,
@@ -54,7 +57,7 @@ func InheritNatsAbstractMessageQueue(overrides cqueues.IMessageQueueOverrides, n
 		),
 		Logger: clog.NewCompositeLogger(),
 	}
-	c.MessageQueue = *cqueues.InheritMessageQueue(overrides, name)
+	c.MessageQueue = *cqueues.InheritMessageQueue(overrides, name, capabilities)
 	c.DependencyResolver = cref.NewDependencyResolver()
 	c.DependencyResolver.Configure(c.defaultConfig)
 	return c
@@ -153,6 +156,16 @@ func (c *NatsAbstractMessageQueue) Open(correlationId string) (err error) {
 	return err
 }
 
+// OpenWithParams method are opens the component with given connection and credential parameters.
+//  - correlationId     (optional) transaction id to trace execution through call chain.
+//  - connections        connection parameters
+//  - credential        credential parameters
+// Returns error or nil no errors occured.
+func (c *NatsAbstractMessageQueue) OpenWithParams(correlationId string, connections []*cconn.ConnectionParams,
+	credential *cauth.CredentialParams) error {
+	panic("Not supported")
+}
+
 // Closes component and frees used resources.
 //   - correlationId 	(optional) transaction id to trace execution through call chain.
 //   - Returns 			error or nil no errors occured.
@@ -194,7 +207,7 @@ func (c *NatsAbstractMessageQueue) SubscriptionSubject() string {
 	if c.Subject != "" {
 		return c.Subject
 	}
-	return c.Name
+	return c.Name()
 }
 
 func (c *NatsAbstractMessageQueue) FromMessage(message *cqueues.MessageEnvelope) (*nats.Msg, error) {
@@ -208,20 +221,21 @@ func (c *NatsAbstractMessageQueue) FromMessage(message *cqueues.MessageEnvelope)
 	// 		return nil, err
 	// 	}
 
-	// 	msg := nats.NewMsg(c.Name)
+	// 	msg := nats.NewMsg(c.Name())
 	// 	msg.Data = data
 	// 	return msg, nil
 	// } else {
-	// 	msg := nats.NewMsg(c.Name)
+	// 	msg := nats.NewMsg(c.Name())
 	// 	msg.Data = message.Message
 	// 	return msg, nil
 	// }
 
-	msg := nats.NewMsg(c.Name)
+	msg := nats.NewMsg(c.Name())
 	msg.Data = message.Message
 	msg.Header.Add("message_id", message.MessageId)
 	msg.Header.Add("correlation_id", message.CorrelationId)
 	msg.Header.Add("message_type", message.MessageType)
+	msg.Header.Add("sent_time", cconv.StringConverter.ToString(message.SentTime))
 	return msg, nil
 }
 
@@ -243,6 +257,7 @@ func (c *NatsAbstractMessageQueue) ToMessage(msg *nats.Msg) (*cqueues.MessageEnv
 	message.MessageId = msg.Header.Get("message_id")
 	message.CorrelationId = msg.Header.Get("correlation_id")
 	message.MessageType = msg.Header.Get("message_type")
+	message.SentTime = cconv.DateTimeConverter.ToDateTime(msg.Header.Get("sent_time"))
 	message.Message = msg.Data
 
 	return message, nil
@@ -259,7 +274,7 @@ func (c *NatsAbstractMessageQueue) Clear(correlationId string) error {
 
 // ReadMessageCount method are reads the current number of messages in the queue to be delivered.
 // Returns number of messages or error.
-func (c *NatsAbstractMessageQueue) MessageCount() (int64, error) {
+func (c *NatsAbstractMessageQueue) ReadMessageCount() (int64, error) {
 	// Not supported
 	return 0, nil
 }
@@ -282,12 +297,12 @@ func (c *NatsAbstractMessageQueue) Send(correlationId string, envelop *cqueues.M
 
 	err = c.Client.PublishMsg(msg)
 	if err != nil {
-		c.Logger.Error(envelop.CorrelationId, err, "Failed to send message via %s", c.GetName())
+		c.Logger.Error(envelop.CorrelationId, err, "Failed to send message via %s", c.Name())
 		return err
 	}
 
-	c.Counters.IncrementOne("queue." + c.GetName() + ".sent_messages")
-	c.Logger.Debug(envelop.CorrelationId, "Sent message %s via %s", envelop.String(), c.GetName())
+	c.Counters.IncrementOne("queue." + c.Name() + ".sent_messages")
+	c.Logger.Debug(envelop.CorrelationId, "Sent message %s via %s", envelop.String(), c.Name())
 
 	return nil
 }

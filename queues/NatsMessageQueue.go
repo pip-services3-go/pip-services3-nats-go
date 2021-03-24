@@ -39,6 +39,7 @@ NatsMessageQueue are message queue that sends and receives messages via NATS mes
 - *:counters:*:*:1.0           (optional)  ICounters components to pass collected measurements
 - *:discovery:*:*:1.0          (optional)  IDiscovery services to resolve connections
 - *:credential-store:*:*:1.0   (optional) Credential stores to resolve credentials
+- *:connection:nats:*:1.0      (optional) Shared connection to NATS service
 
 See MessageQueue
 See MessagingCapabilities
@@ -78,8 +79,8 @@ type NatsMessageQueue struct {
 func NewNatsMessageQueue(name string) *NatsMessageQueue {
 	c := NatsMessageQueue{}
 
-	c.NatsAbstractMessageQueue = InheritNatsAbstractMessageQueue(&c, name)
-	c.Capabilities = cqueues.NewMessagingCapabilities(false, true, true, true, true, false, false, false, true)
+	c.NatsAbstractMessageQueue = InheritNatsAbstractMessageQueue(&c, name,
+		cqueues.NewMessagingCapabilities(false, true, true, true, true, false, false, false, true))
 
 	c.messages = make([]cqueues.MessageEnvelope, 0)
 	c.cancel = 0
@@ -212,7 +213,7 @@ func (c *NatsMessageQueue) PeekBatch(correlationId string, messageCount int64) (
 		messages = append(messages, &message)
 	}
 
-	c.Logger.Trace(correlationId, "Peeked %d messages on %s", len(messages), c.GetName())
+	c.Logger.Trace(correlationId, "Peeked %d messages on %s", len(messages), c.Name())
 
 	return messages, nil
 }
@@ -261,8 +262,8 @@ func (c *NatsMessageQueue) receiveMessage(msg *nats.Msg) {
 		c.Logger.Error("", err, "Failed to read received message")
 	}
 
-	c.Counters.IncrementOne("queue." + c.GetName() + ".received_messages")
-	c.Logger.Debug(message.CorrelationId, "Received message %s via %s", msg, c.GetName())
+	c.Counters.IncrementOne("queue." + c.Name() + ".received_messages")
+	c.Logger.Debug(message.CorrelationId, "Received message %s via %s", msg, c.Name())
 
 	c.Lock.Lock()
 	defer c.Lock.Unlock()

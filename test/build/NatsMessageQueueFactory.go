@@ -21,5 +21,5 @@ func TestNatsMessageQueueFactory(t *testing.T) {
 	assert.NotNil(t, comp)
 
 	queue := comp.(queues.NatsBareMessageQueue)
-	assert.Equal(t, "test", queue.GetName())
+	assert.Equal(t, "test", queue.Name())
 }

@@ -8,6 +8,6 @@ require (
 	github.com/nats-io/nats.go v1.10.1-0.20210228004050-ed743748acac
 	github.com/pip-services3-go/pip-services3-commons-go v1.0.3
 	github.com/pip-services3-go/pip-services3-components-go v1.0.7
-	github.com/pip-services3-go/pip-services3-messaging-go v1.1.0
+	github.com/pip-services3-go/pip-services3-messaging-go v1.1.1
 	github.com/stretchr/testify v1.7.0
 )

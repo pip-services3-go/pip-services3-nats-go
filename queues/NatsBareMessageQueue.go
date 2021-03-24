@@ -37,6 +37,7 @@ NatsBareMessageQueue are message queue that sends and receives messages via NATS
 - *:counters:*:*:1.0           (optional)  ICounters components to pass collected measurements
 - *:discovery:*:*:1.0          (optional)  IDiscovery services to resolve connections
 - *:credential-store:*:*:1.0   (optional) Credential stores to resolve credentials
+- *:connection:nats:*:1.0      (optional) Shared connection to NATS service
 
 See MessageQueue
 See MessagingCapabilities
@@ -72,8 +73,8 @@ type NatsBareMessageQueue struct {
 //   - name  string (optional) a queue name.
 func NewNatsBareMessageQueue(name string) *NatsBareMessageQueue {
 	c := NatsBareMessageQueue{}
-	c.NatsAbstractMessageQueue = InheritNatsAbstractMessageQueue(&c, name)
-	c.Capabilities = cqueues.NewMessagingCapabilities(false, true, true, false, false, false, false, false, false)
+	c.NatsAbstractMessageQueue = InheritNatsAbstractMessageQueue(&c, name,
+		cqueues.NewMessagingCapabilities(false, true, true, false, false, false, false, false, false))
 	return &c
 }
 
@@ -142,8 +143,8 @@ func (c *NatsBareMessageQueue) receiveMessage(receiver cqueues.IMessageReceiver)
 			c.Logger.Error("", err, "Failed to read received message")
 		}
 
-		c.Counters.IncrementOne("queue." + c.GetName() + ".received_messages")
-		c.Logger.Debug(message.CorrelationId, "Received message %s via %s", msg, c.GetName())
+		c.Counters.IncrementOne("queue." + c.Name() + ".received_messages")
+		c.Logger.Debug(message.CorrelationId, "Received message %s via %s", msg, c.Name())
 
 		// Pass the message to receiver and recover after panic
 		func(message *cqueues.MessageEnvelope) {
