@@ -1,4 +1,4 @@
-# <img src="https://uploads-ssl.webflow.com/5ea5d3315186cf5ec60c3ee4/5edf1c94ce4c859f2b188094_logo.svg" alt="Pip.Services Logo" width="200"> <br/> Nats specific components for Golang
+# <img src="https://uploads-ssl.webflow.com/5ea5d3315186cf5ec60c3ee4/5edf1c94ce4c859f2b188094_logo.svg" alt="Pip.Services Logo" width="200"> <br/> NATS messaging components for Pip.Services in Go
 
 This library is a part of [Pip.Services](https://github.com/pip-services/pip-services) project.
 The Nats module contains a set of components for working with the message queue via NATS server [https://nats.io/](https://nats.io/).
