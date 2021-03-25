@@ -5,6 +5,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	cconf "github.com/pip-services3-go/pip-services3-commons-go/config"
+	cerr "github.com/pip-services3-go/pip-services3-commons-go/errors"
 	cref "github.com/pip-services3-go/pip-services3-commons-go/refer"
 	clog "github.com/pip-services3-go/pip-services3-components-go/log"
 )
@@ -47,6 +48,9 @@ type NatsConnection struct {
 	// The NATS connection object.
 	Connection *nats.Conn
 
+	// Topic subscriptions
+	subscriptions []*NatsSubscription
+
 	retryConnect     bool
 	maxReconnect     int
 	reconnectTimeout int
@@ -67,6 +71,8 @@ func NewNatsConnection() *NatsConnection {
 		Logger:             clog.NewCompositeLogger(),
 		ConnectionResolver: NewNatsConnectionResolver(),
 		Options:            cconf.NewEmptyConfigParams(),
+
+		subscriptions: []*NatsSubscription{},
 
 		retryConnect:     true,
 		maxReconnect:     3,
@@ -153,7 +159,10 @@ func (c *NatsConnection) Close(correlationId string) error {
 	}
 	c.Connection.Close()
 	c.Logger.Debug(correlationId, "Disconnected to NATS server")
+
 	c.Connection = nil
+	c.subscriptions = []*NatsSubscription{}
+
 	return nil
 }
 
@@ -163,4 +172,102 @@ func (c *NatsConnection) GetConnection() *nats.Conn {
 
 func (c *NatsConnection) GetQueueNames() ([]string, error) {
 	return []string{}, nil
+}
+
+func (c *NatsConnection) checkOpen() error {
+	if c.Connection != nil {
+		return nil
+	}
+
+	return cerr.NewInvalidStateError(
+		"",
+		"NOT_OPEN",
+		"Connection was not opened",
+	)
+}
+
+// Publish a message to a specified topic
+//
+// Parameters:
+//  - subject a subject (topic) name
+//  - message a message to be published
+// Returns: error or nil for success
+func (c *NatsConnection) Publish(subject string, message *nats.Msg) error {
+	// Check for open connection
+	err := c.checkOpen()
+	if err != nil {
+		return err
+	}
+
+	if subject != "" {
+		message.Subject = subject
+	}
+	return c.Connection.PublishMsg(message)
+}
+
+// Subscribe to a topic
+//
+// Parameters:
+//   - subject a subject (topic) name
+//   - queue (optional) a queue group
+//   - listener a message listener
+// Returns: err or nil for success
+func (c *NatsConnection) Subscribe(subject string, queue string, listener INatsMessageListener) error {
+	// Check for open connection
+	err := c.checkOpen()
+	if err != nil {
+		return err
+	}
+
+	// Create the subscription
+	subscription := &NatsSubscription{
+		Subject:    subject,
+		QueueGroup: queue,
+		Listener:   listener,
+	}
+
+	// Subscribe to topic
+	if queue == "" {
+		subscription.Handler, err = c.Connection.QueueSubscribe(subject, queue, listener.OnMessage)
+	} else {
+		subscription.Handler, err = c.Connection.Subscribe(subject, listener.OnMessage)
+	}
+	if err != nil {
+		return err
+	}
+
+	// Add the subscription
+	c.subscriptions = append(c.subscriptions, subscription)
+	return nil
+}
+
+// Unsubscribe from a previously subscribed topic topic
+//
+// Parameters:
+//   - subject a subject (topic) name
+//   - queue (optional) a queue group
+//   - listener a message listener
+// Returns: err or nil for success
+func (c *NatsConnection) Unsubscribe(subject string, queue string, listener INatsMessageListener) error {
+	// Remove the subscription
+	var removedSubscription *NatsSubscription
+	for index, subscription := range c.subscriptions {
+		if subscription.Subject == subject && subscription.QueueGroup == queue && subscription.Listener == listener {
+			removedSubscription = subscription
+			c.subscriptions = append(c.subscriptions[:index], c.subscriptions[index+1:]...)
+			break
+		}
+	}
+
+	// If nothing to remove then skip
+	if removedSubscription == nil {
+		return nil
+	}
+
+	// Unsubscribe from the topic
+	if removedSubscription.Handler != nil {
+		return removedSubscription.Handler.Unsubscribe()
+	}
+
+	return nil
 }

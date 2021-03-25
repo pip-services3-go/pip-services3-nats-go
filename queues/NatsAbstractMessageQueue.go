@@ -296,7 +296,12 @@ func (c *NatsAbstractMessageQueue) Send(correlationId string, envelop *cqueues.M
 		return err
 	}
 
-	err = c.Client.PublishMsg(msg)
+	subject := c.Name()
+	if subject == "" {
+		subject = c.Subject
+	}
+
+	err = c.Connection.Publish(subject, msg)
 	if err != nil {
 		c.Logger.Error(envelop.CorrelationId, err, "Failed to send message via %s", c.Name())
 		return err

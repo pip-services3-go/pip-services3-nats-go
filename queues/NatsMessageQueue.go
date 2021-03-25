@@ -2,7 +2,6 @@ package queues
 
 import (
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -68,9 +67,8 @@ Example:
 type NatsMessageQueue struct {
 	*NatsAbstractMessageQueue
 
-	subscription *nats.Subscription
-	messages     []cqueues.MessageEnvelope
-	cancel       int32
+	messages []cqueues.MessageEnvelope
+	receiver cqueues.IMessageReceiver
 }
 
 // NewNatsMessageQueue are creates a new instance of the message queue.
@@ -83,7 +81,6 @@ func NewNatsMessageQueue(name string) *NatsMessageQueue {
 		cqueues.NewMessagingCapabilities(false, true, true, true, true, false, false, false, true))
 
 	c.messages = make([]cqueues.MessageEnvelope, 0)
-	c.cancel = 0
 
 	return &c
 }
@@ -103,11 +100,8 @@ func (c *NatsMessageQueue) Open(correlationId string) error {
 	}
 
 	// Subscribe right away
-	if c.QueueGroup != "" {
-		c.subscription, err = c.Client.QueueSubscribe(c.SubscriptionSubject(), c.QueueGroup, c.receiveMessage)
-	} else {
-		c.subscription, err = c.Client.Subscribe(c.SubscriptionSubject(), c.receiveMessage)
-	}
+	subject := c.SubscriptionSubject()
+	err = c.Connection.Subscribe(subject, c.QueueGroup, c)
 	if err != nil {
 		c.Close(correlationId)
 		return err
@@ -127,11 +121,14 @@ func (c *NatsMessageQueue) Close(correlationId string) error {
 
 	err := c.NatsAbstractMessageQueue.Close(correlationId)
 
+	// Unsubscribe from topic
+	subject := c.SubscriptionSubject()
+	c.Connection.Unsubscribe(subject, c.QueueGroup, c)
+
 	c.Lock.Lock()
 	defer c.Lock.Unlock()
-	c.subscription = nil
+	c.receiver = nil
 	c.messages = make([]cqueues.MessageEnvelope, 0)
-	atomic.StoreInt32(&c.cancel, 1)
 
 	return err
 }
@@ -145,7 +142,7 @@ func (c *NatsMessageQueue) Clear(correlationId string) (err error) {
 	defer c.Lock.Unlock()
 
 	c.messages = make([]cqueues.MessageEnvelope, 0)
-	atomic.StoreInt32(&c.cancel, 1)
+	c.receiver = nil
 
 	return nil
 }
@@ -255,7 +252,7 @@ func (c *NatsMessageQueue) Receive(correlationId string, waitTimeout time.Durati
 	return message, nil
 }
 
-func (c *NatsMessageQueue) receiveMessage(msg *nats.Msg) {
+func (c *NatsMessageQueue) OnMessage(msg *nats.Msg) {
 	// Deserialize message
 	message, err := c.ToMessage(msg)
 	if err != nil {
@@ -265,9 +262,32 @@ func (c *NatsMessageQueue) receiveMessage(msg *nats.Msg) {
 	c.Counters.IncrementOne("queue." + c.Name() + ".received_messages")
 	c.Logger.Debug(message.CorrelationId, "Received message %s via %s", msg, c.Name())
 
+	// Send message to receiver if its set or put it into the queue
 	c.Lock.Lock()
-	defer c.Lock.Unlock()
-	c.messages = append(c.messages, *message)
+	if c.receiver != nil {
+		receiver := c.receiver
+		c.Lock.Unlock()
+		c.sendMessageToReceiver(receiver, message)
+	} else {
+		c.messages = append(c.messages, *message)
+		c.Lock.Unlock()
+	}
+}
+
+func (c *NatsMessageQueue) sendMessageToReceiver(receiver cqueues.IMessageReceiver, message *cqueues.MessageEnvelope) {
+	correlationId := message.CorrelationId
+
+	defer func() {
+		if r := recover(); r != nil {
+			err := fmt.Sprintf("%v", r)
+			c.Logger.Error(correlationId, nil, "Failed to process the message - "+err)
+		}
+	}()
+
+	err := receiver.ReceiveMessage(message, c)
+	if err != nil {
+		c.Logger.Error(correlationId, err, "Failed to process the message")
+	}
 }
 
 // Listens for incoming messages and blocks the current thread until queue is closed.
@@ -278,34 +298,28 @@ func (c *NatsMessageQueue) receiveMessage(msg *nats.Msg) {
 // See IMessageReceiver
 // See receive
 func (c *NatsMessageQueue) Listen(correlationId string, receiver cqueues.IMessageReceiver) error {
-	c.Logger.Trace("", "Started listening messages at %s", c.String())
-
-	// Unset cancellation token
-	atomic.StoreInt32(&c.cancel, 0)
-
-	for atomic.LoadInt32(&c.cancel) == 0 {
-		message, err := c.Receive(correlationId, time.Duration(1000)*time.Millisecond)
-		if err != nil {
-			c.Logger.Error(correlationId, err, "Failed to receive the message")
-		}
-
-		if message != nil && atomic.LoadInt32(&c.cancel) == 0 {
-			// Todo: shall we recover after panic here??
-			func(message *cqueues.MessageEnvelope) {
-				defer func() {
-					if r := recover(); r != nil {
-						err := fmt.Sprintf("%v", r)
-						c.Logger.Error(correlationId, nil, "Failed to process the message - "+err)
-					}
-				}()
-
-				err = receiver.ReceiveMessage(message, c)
-				if err != nil {
-					c.Logger.Error(correlationId, err, "Failed to process the message")
-				}
-			}(message)
-		}
+	err := c.CheckOpen(correlationId)
+	if err != nil {
+		return err
 	}
+
+	c.Logger.Trace("", "Started listening messages at %s", c.Name())
+
+	// Get all collected messages
+	c.Lock.Lock()
+	batchMessages := c.messages
+	c.messages = []cqueues.MessageEnvelope{}
+	c.Lock.Unlock()
+
+	// Resend collected messages to receiver
+	for _, message := range batchMessages {
+		receiver.ReceiveMessage(&message, c)
+	}
+
+	// Set the receiver
+	c.Lock.Lock()
+	c.receiver = receiver
+	c.Lock.Unlock()
 
 	return nil
 }
@@ -315,5 +329,7 @@ func (c *NatsMessageQueue) Listen(correlationId string, receiver cqueues.IMessag
 // Parameters:
 //   - correlationId  string   (optional) transaction id to trace execution through call chain.
 func (c *NatsMessageQueue) EndListen(correlationId string) {
-	atomic.StoreInt32(&c.cancel, 1)
+	c.Lock.Lock()
+	c.receiver = nil
+	c.Lock.Unlock()
 }
