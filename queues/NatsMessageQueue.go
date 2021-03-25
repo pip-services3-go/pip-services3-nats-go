@@ -152,7 +152,7 @@ func (c *NatsMessageQueue) Clear(correlationId string) (err error) {
 
 // ReadMessageCount method are reads the current number of messages in the queue to be delivered.
 // Returns number of messages or error.
-func (c *NatsMessageQueue) MessageCount() (count int64, err error) {
+func (c *NatsMessageQueue) ReadMessageCount() (count int64, err error) {
 	c.Lock.Lock()
 	defer c.Lock.Unlock()
 

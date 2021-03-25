@@ -4,6 +4,7 @@ import (
 	cconf "github.com/pip-services3-go/pip-services3-commons-go/config"
 	cref "github.com/pip-services3-go/pip-services3-commons-go/refer"
 	"github.com/pip-services3-go/pip-services3-components-go/build"
+	cqueues "github.com/pip-services3-go/pip-services3-messaging-go/queues"
 	"github.com/pip-services3-go/pip-services3-nats-go/queues"
 )
 
@@ -31,17 +32,7 @@ func NewNatsMessageQueueFactory() *NatsMessageQueueFactory {
 		if ok {
 			name = descriptor.Name()
 		}
-
-		queue := queues.NewNatsBareMessageQueue(name)
-
-		if c.config != nil {
-			queue.Configure(c.config)
-		}
-		if c.references != nil {
-			queue.SetReferences(c.references)
-		}
-
-		return queue
+		return c.CreateBareQueue(name)
 	})
 
 	c.Register(natsQueueDescriptor, func(locator interface{}) interface{} {
@@ -50,18 +41,42 @@ func NewNatsMessageQueueFactory() *NatsMessageQueueFactory {
 		if ok {
 			name = descriptor.Name()
 		}
-
-		queue := queues.NewNatsMessageQueue(name)
-
-		if c.config != nil {
-			queue.Configure(c.config)
-		}
-		if c.references != nil {
-			queue.SetReferences(c.references)
-		}
-
-		return queue
+		return c.CreateQueue(name)
 	})
 
 	return &c
+}
+
+// Creates a message queue component and assigns its name.
+//
+// Parameters:
+//   - name: a name of the created message queue.
+func (c *NatsMessageQueueFactory) CreateQueue(name string) cqueues.IMessageQueue {
+	queue := queues.NewNatsMessageQueue(name)
+
+	if c.config != nil {
+		queue.Configure(c.config)
+	}
+	if c.references != nil {
+		queue.SetReferences(c.references)
+	}
+
+	return queue
+}
+
+// Creates a message queue component and assigns its name.
+//
+// Parameters:
+//   - name: a name of the created message queue.
+func (c *NatsMessageQueueFactory) CreateBareQueue(name string) cqueues.IMessageQueue {
+	queue := queues.NewNatsBareMessageQueue(name)
+
+	if c.config != nil {
+		queue.Configure(c.config)
+	}
+	if c.references != nil {
+		queue.SetReferences(c.references)
+	}
+
+	return queue
 }
