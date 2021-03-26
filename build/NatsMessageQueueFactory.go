@@ -47,6 +47,14 @@ func NewNatsMessageQueueFactory() *NatsMessageQueueFactory {
 	return &c
 }
 
+func (c *NatsMessageQueueFactory) Configure(config *cconf.ConfigParams) {
+	c.config = config
+}
+
+func (c *NatsMessageQueueFactory) SetReferences(references cref.IReferences) {
+	c.references = references
+}
+
 // Creates a message queue component and assigns its name.
 //
 // Parameters:
