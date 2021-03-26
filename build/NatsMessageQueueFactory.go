@@ -1,9 +1,8 @@
 package build
 
 import (
-	cconf "github.com/pip-services3-go/pip-services3-commons-go/config"
 	cref "github.com/pip-services3-go/pip-services3-commons-go/refer"
-	"github.com/pip-services3-go/pip-services3-components-go/build"
+	"github.com/pip-services3-go/pip-services3-messaging-go/build"
 	cqueues "github.com/pip-services3-go/pip-services3-messaging-go/queues"
 	"github.com/pip-services3-go/pip-services3-nats-go/queues"
 )
@@ -14,14 +13,14 @@ import (
 // See Factory
 // See NatsMessageQueue
 type NatsMessageQueueFactory struct {
-	build.Factory
-	config     *cconf.ConfigParams
-	references cref.IReferences
+	build.MessageQueueFactory
 }
 
 // NewNatsMessageQueueFactory method are create a new instance of the factory.
 func NewNatsMessageQueueFactory() *NatsMessageQueueFactory {
-	c := NatsMessageQueueFactory{}
+	c := NatsMessageQueueFactory{
+		MessageQueueFactory: *build.InheritMessageQueueFactory(),
+	}
 
 	bareNatsQueueDescriptor := cref.NewDescriptor("pip-services", "message-queue", "bare-nats", "*", "1.0")
 	natsQueueDescriptor := cref.NewDescriptor("pip-services", "message-queue", "nats", "*", "1.0")
@@ -47,14 +46,6 @@ func NewNatsMessageQueueFactory() *NatsMessageQueueFactory {
 	return &c
 }
 
-func (c *NatsMessageQueueFactory) Configure(config *cconf.ConfigParams) {
-	c.config = config
-}
-
-func (c *NatsMessageQueueFactory) SetReferences(references cref.IReferences) {
-	c.references = references
-}
-
 // Creates a message queue component and assigns its name.
 //
 // Parameters:
@@ -62,11 +53,11 @@ func (c *NatsMessageQueueFactory) SetReferences(references cref.IReferences) {
 func (c *NatsMessageQueueFactory) CreateQueue(name string) cqueues.IMessageQueue {
 	queue := queues.NewNatsMessageQueue(name)
 
-	if c.config != nil {
-		queue.Configure(c.config)
+	if c.Config != nil {
+		queue.Configure(c.Config)
 	}
-	if c.references != nil {
-		queue.SetReferences(c.references)
+	if c.References != nil {
+		queue.SetReferences(c.References)
 	}
 
 	return queue
@@ -79,11 +70,11 @@ func (c *NatsMessageQueueFactory) CreateQueue(name string) cqueues.IMessageQueue
 func (c *NatsMessageQueueFactory) CreateBareQueue(name string) cqueues.IMessageQueue {
 	queue := queues.NewNatsBareMessageQueue(name)
 
-	if c.config != nil {
-		queue.Configure(c.config)
+	if c.Config != nil {
+		queue.Configure(c.Config)
 	}
-	if c.references != nil {
-		queue.SetReferences(c.references)
+	if c.References != nil {
+		queue.SetReferences(c.References)
 	}
 
 	return queue

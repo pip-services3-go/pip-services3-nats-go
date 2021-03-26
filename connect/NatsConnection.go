@@ -170,8 +170,16 @@ func (c *NatsConnection) GetConnection() *nats.Conn {
 	return c.Connection
 }
 
-func (c *NatsConnection) GetQueueNames() ([]string, error) {
+func (c *NatsConnection) ReadQueueNames() ([]string, error) {
 	return []string{}, nil
+}
+
+func (c *NatsConnection) CreateQueue() error {
+	return nil
+}
+
+func (c *NatsConnection) DeleteQueue() error {
+	return nil
 }
 
 func (c *NatsConnection) checkOpen() error {
