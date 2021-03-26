@@ -260,6 +260,7 @@ func (c *NatsAbstractMessageQueue) ToMessage(msg *nats.Msg) (*cqueues.MessageEnv
 	message.MessageType = msg.Header.Get("message_type")
 	message.SentTime = cconv.DateTimeConverter.ToDateTime(msg.Header.Get("sent_time"))
 	message.Message = msg.Data
+	message.SetReference(msg)
 
 	return message, nil
 }

@@ -56,6 +56,7 @@ func newNatsMessageQueueTest() *natsMessageQueueTest {
 		"credential.token", natsToken,
 		"credential.username", natsUser,
 		"credential.password", natsPassword,
+		"options.autosubscribe", true,
 	))
 
 	fixture := NewMessageQueueFixture(queue)

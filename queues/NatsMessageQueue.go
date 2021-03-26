@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	cconf "github.com/pip-services3-go/pip-services3-commons-go/config"
 	cqueues "github.com/pip-services3-go/pip-services3-messaging-go/queues"
 )
 
@@ -26,6 +27,7 @@ NatsMessageQueue are message queue that sends and receives messages via NATS mes
   - password:                    user password
 - options:
   - serialize_message:    (optional) true to serialize entire message as JSON, false to send only message payload (default: true)
+  - autosubscribe:        (optional) true to automatically subscribe on option (default: false)
   - retry_connect:        (optional) turns on/off automated reconnect when connection is log (default: true)
   - max_reconnect:        (optional) maximum reconnection attempts (default: 3)
   - reconnect_timeout:    (optional) number of milliseconds to wait on each reconnection attempt (default: 3000)
@@ -67,8 +69,10 @@ Example:
 type NatsMessageQueue struct {
 	*NatsAbstractMessageQueue
 
-	messages []cqueues.MessageEnvelope
-	receiver cqueues.IMessageReceiver
+	autoSubscribe bool
+	subscribed    bool
+	messages      []cqueues.MessageEnvelope
+	receiver      cqueues.IMessageReceiver
 }
 
 // NewNatsMessageQueue are creates a new instance of the message queue.
@@ -83,6 +87,14 @@ func NewNatsMessageQueue(name string) *NatsMessageQueue {
 	c.messages = make([]cqueues.MessageEnvelope, 0)
 
 	return &c
+}
+
+// Configures component by passing configuration parameters.
+//   - config    configuration parameters to be set.
+func (c *NatsMessageQueue) Configure(config *cconf.ConfigParams) {
+	c.NatsAbstractMessageQueue.Configure(config)
+
+	c.autoSubscribe = config.GetAsBooleanWithDefault("options.autosubscribe", c.autoSubscribe)
 }
 
 // Opens the component with given connection and credential parameters.
@@ -100,11 +112,12 @@ func (c *NatsMessageQueue) Open(correlationId string) error {
 	}
 
 	// Subscribe right away
-	subject := c.SubscriptionSubject()
-	err = c.Connection.Subscribe(subject, c.QueueGroup, c)
-	if err != nil {
-		c.Close(correlationId)
-		return err
+	if c.autoSubscribe {
+		err = c.subscribe(correlationId)
+		if err != nil {
+			c.Close(correlationId)
+			return err
+		}
 	}
 
 	return nil
@@ -122,8 +135,11 @@ func (c *NatsMessageQueue) Close(correlationId string) error {
 	err := c.NatsAbstractMessageQueue.Close(correlationId)
 
 	// Unsubscribe from topic
-	subject := c.SubscriptionSubject()
-	c.Connection.Unsubscribe(subject, c.QueueGroup, c)
+	if c.subscribed {
+		subject := c.SubscriptionSubject()
+		c.Connection.Unsubscribe(subject, c.QueueGroup, c)
+		c.subscribed = false
+	}
 
 	c.Lock.Lock()
 	defer c.Lock.Unlock()
@@ -131,6 +147,27 @@ func (c *NatsMessageQueue) Close(correlationId string) error {
 	c.messages = make([]cqueues.MessageEnvelope, 0)
 
 	return err
+}
+
+func (c *NatsMessageQueue) subscribe(correlationId string) error {
+	c.Lock.Lock()
+	defer c.Lock.Unlock()
+
+	// Check if already were subscribed
+	if c.subscribed {
+		return nil
+	}
+
+	// Subscribe to the topic
+	subject := c.SubscriptionSubject()
+	err := c.Connection.Subscribe(subject, c.QueueGroup, c)
+	if err != nil {
+		c.Logger.Error(correlationId, err, "Failed to subscribe to subject "+subject)
+		return err
+	}
+
+	c.subscribed = true
+	return nil
 }
 
 // Clear method are clears component state.
@@ -169,6 +206,12 @@ func (c *NatsMessageQueue) Peek(correlationId string) (*cqueues.MessageEnvelope,
 		return nil, err
 	}
 
+	// Subscribe if needed
+	err = c.subscribe(correlationId)
+	if err != nil {
+		return nil, err
+	}
+
 	var message *cqueues.MessageEnvelope
 
 	// Pick a message
@@ -198,6 +241,12 @@ func (c *NatsMessageQueue) PeekBatch(correlationId string, messageCount int64) (
 		return nil, err
 	}
 
+	// Subscribe if needed
+	err = c.subscribe(correlationId)
+	if err != nil {
+		return nil, err
+	}
+
 	c.Lock.Lock()
 	batchMessages := c.messages
 	if messageCount <= (int64)(len(batchMessages)) {
@@ -223,6 +272,12 @@ func (c *NatsMessageQueue) PeekBatch(correlationId string, messageCount int64) (
 // receives a message or error.
 func (c *NatsMessageQueue) Receive(correlationId string, waitTimeout time.Duration) (*cqueues.MessageEnvelope, error) {
 	err := c.CheckOpen(correlationId)
+	if err != nil {
+		return nil, err
+	}
+
+	// Subscribe if needed
+	err = c.subscribe(correlationId)
 	if err != nil {
 		return nil, err
 	}
@@ -299,6 +354,12 @@ func (c *NatsMessageQueue) sendMessageToReceiver(receiver cqueues.IMessageReceiv
 // See receive
 func (c *NatsMessageQueue) Listen(correlationId string, receiver cqueues.IMessageReceiver) error {
 	err := c.CheckOpen(correlationId)
+	if err != nil {
+		return err
+	}
+
+	// Subscribe if needed
+	err = c.subscribe(correlationId)
 	if err != nil {
 		return err
 	}
