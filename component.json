@@ -2,7 +2,7 @@
     "name":  "pip-services3-nats-go",
     "type": "module",
     "language": "go",
-    "version": "1.0.0",
+    "version": "1.0.5",
     "build": 0,
     "registry": "pipservices",
     "artifacts": [
